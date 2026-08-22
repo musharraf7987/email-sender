@@ -12,7 +12,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import {
+  deleteTemplate,
+  fetchTemplates,
+  saveTemplate,
+} from '@/hooks/use-api';
 import { applyTemplate, TEMPLATE_PLACEHOLDER } from '@/lib/template-utils';
+import type { EmailTemplate } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,16 +39,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-
-type EmailTemplate = {
-  id: string;
-  name: string;
-  jobType: string;
-  subject: string;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-};
 
 type FormState = {
   name: string;
@@ -70,26 +66,24 @@ export default function TemplatesPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [previewJobTitle, setPreviewJobTitle] = useState('React Developer');
 
-  const fetchTemplates = useCallback(async () => {
+  const loadTemplates = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/templates');
-      const data = await response.json();
-      if (data.success) {
-        setTemplates(data.templates || []);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load templates' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      const loaded = await fetchTemplates();
+      setTemplates(loaded);
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to load templates',
+      });
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void fetchTemplates();
-  }, [fetchTemplates]);
+    void loadTemplates();
+  }, [loadTemplates]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -128,29 +122,18 @@ export default function TemplatesPage() {
     setMessage(null);
 
     try {
-      const url = editingId ? `/api/templates/${editingId}` : '/api/templates';
-      const method = editingId ? 'PATCH' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+      await saveTemplate(form, editingId);
+      setMessage({
+        type: 'success',
+        text: editingId ? 'Template updated successfully' : 'Template created successfully',
       });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({
-          type: 'success',
-          text: editingId ? 'Template updated successfully' : 'Template created successfully',
-        });
-        closeEditor();
-        await fetchTemplates();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to save template' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      closeEditor();
+      await loadTemplates();
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save template',
+      });
     } finally {
       setSaving(false);
     }
@@ -166,19 +149,16 @@ export default function TemplatesPage() {
 
     setSaving(true);
     try {
-      const response = await fetch(`/api/templates/${deletingTemplate.id}`, { method: 'DELETE' });
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Template deleted successfully' });
-        setDeleteOpen(false);
-        setDeletingTemplate(null);
-        await fetchTemplates();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete template' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      await deleteTemplate(deletingTemplate.id);
+      setMessage({ type: 'success', text: 'Template deleted successfully' });
+      setDeleteOpen(false);
+      setDeletingTemplate(null);
+      await loadTemplates();
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to delete template',
+      });
     } finally {
       setSaving(false);
     }

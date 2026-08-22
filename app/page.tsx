@@ -15,7 +15,14 @@ import {
   Trash2,
   User,
 } from 'lucide-react';
+import {
+  checkDuplicateEmails,
+  fetchTemplates,
+  sendBulkEmails,
+} from '@/hooks/use-api';
+import { formatDate } from '@/lib/format';
 import { applyTemplate } from '@/lib/template-utils';
+import type { DuplicateApplication, EmailTemplate, SendEmailResult } from '@/types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,29 +51,6 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 
-type DuplicateApp = {
-  email: string;
-  jobType: string;
-  status: string;
-  appliedAt: string;
-  companyName: string | null;
-};
-
-type EmailTemplate = {
-  id: string;
-  name: string;
-  jobType: string;
-  subject: string;
-  body: string;
-};
-
-const formatAppliedDate = (value: string) =>
-  new Date(value).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-
 export default function Home() {
   const [emails, setEmails] = useState<string[]>(['']);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -75,8 +59,8 @@ export default function Home() {
   const [recruiterPhone, setRecruiterPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [results, setResults] = useState<Array<{ email: string; success: boolean; message: string }>>([]);
-  const [duplicates, setDuplicates] = useState<DuplicateApp[]>([]);
+  const [results, setResults] = useState<SendEmailResult[]>([]);
+  const [duplicates, setDuplicates] = useState<DuplicateApplication[]>([]);
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, 'apply' | 'discard'>>({});
   const [pendingEmails, setPendingEmails] = useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -101,14 +85,13 @@ export default function Home() {
     [emails]
   );
 
-  const fetchTemplates = useCallback(async () => {
+  const loadTemplates = useCallback(async () => {
     setTemplatesLoading(true);
     try {
-      const response = await fetch('/api/templates');
-      const data = await response.json();
-      if (data.success && Array.isArray(data.templates) && data.templates.length > 0) {
-        setTemplates(data.templates);
-        setTemplateId((data.templates[0] as EmailTemplate).id);
+      const loaded = await fetchTemplates();
+      if (loaded.length > 0) {
+        setTemplates(loaded);
+        setTemplateId(loaded[0].id);
       }
     } catch {
       setMessage({ type: 'error', text: 'Failed to load email templates' });
@@ -118,8 +101,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void fetchTemplates();
-  }, [fetchTemplates]);
+    void loadTemplates();
+  }, [loadTemplates]);
 
   const handleTemplateChange = (id: string) => {
     setTemplateId(id);
@@ -162,40 +145,32 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emails: emailsToSend,
-          templateId,
-          jobTitle: template.jobType,
-          recruiterPhone,
-        }),
+      const data = await sendBulkEmails({
+        emails: emailsToSend,
+        templateId,
+        jobTitle: template.jobType,
+        recruiterPhone,
       });
 
-      const data = await response.json();
+      setResults(data.results || []);
+      const successCount = data.results?.filter((r) => r.success).length || 0;
+      const totalCount = data.results?.length || 0;
 
       if (data.success) {
-        setResults(data.results || []);
-        const successCount = data.results?.filter((r: { success: boolean }) => r.success).length || 0;
-        const totalCount = data.results?.length || 0;
-
-        if (successCount === totalCount) {
-          setMessage({ type: 'success', text: `All ${totalCount} email(s) sent successfully!` });
-        } else {
-          setMessage({
-            type: 'error',
-            text: `${successCount} of ${totalCount} email(s) sent successfully. Some failed.`,
-          });
-        }
-
+        setMessage({ type: 'success', text: `All ${totalCount} email(s) sent successfully!` });
         setEmails(['']);
         setRecruiterPhone('');
       } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to send emails' });
+        setMessage({
+          type: 'error',
+          text: `${successCount} of ${totalCount} email(s) sent successfully. Some failed.`,
+        });
       }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Network error. Please try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -224,20 +199,7 @@ export default function Home() {
     }
 
     try {
-      const checkResponse = await fetch('/api/applications/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails: emailsToSend }),
-      });
-      const checkData = await checkResponse.json();
-
-      if (!checkResponse.ok || !checkData.success) {
-        setMessage({ type: 'error', text: checkData.error || 'Failed to check previous applications' });
-        setLoading(false);
-        return;
-      }
-
-      const found: DuplicateApp[] = checkData.duplicates || [];
+      const found = await checkDuplicateEmails(emailsToSend);
       if (found.length > 0) {
         setPendingEmails(emailsToSend);
         setDuplicates(found);
@@ -248,8 +210,11 @@ export default function Home() {
       }
 
       await sendEmails(emailsToSend);
-    } catch {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Network error. Please try again.',
+      });
       setLoading(false);
     }
   };
@@ -627,7 +592,7 @@ export default function Home() {
                 <div key={item.email} className="rounded-lg border border-border/60 bg-muted/30 p-3">
                   <p className="break-all text-sm font-medium">{item.email}</p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Applied on {formatAppliedDate(item.appliedAt)}
+                    Applied on {formatDate(item.appliedAt)}
                     {item.jobType ? ` as ${item.jobType}` : ''}
                     {item.status ? ` · ${item.status}` : ''}
                     {item.companyName ? ` · ${item.companyName}` : ''}

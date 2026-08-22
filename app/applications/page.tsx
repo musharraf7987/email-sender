@@ -31,61 +31,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  checkInboxReplies,
+  deleteApplicationRecord,
+  fetchApplicationsList,
+  updateApplicationRecord,
+  type ApplicationRecord,
+} from '@/hooks/use-api';
+import {
+  APPLICATION_STATUSES,
+  JOB_TYPES,
+  PAGE_SIZE,
+  PRIORITIES,
+} from '@/lib/constants';
+import { daysUntilExpiry, formatDate } from '@/lib/format';
+import type { PaginationMeta } from '@/types';
 
-type Application = {
-  id: string;
-  email: string;
-  domain: string;
-  companyName: string | null;
-  jobType: string;
-  subject: string;
-  status: string;
-  appliedAt: string;
-  expiresAt: string;
-  messageId: string | null;
-  emailSent: boolean;
-  sendError: string | null;
-  recruiterName: string | null;
-  recruiterPhone: string | null;
-  jobTitle: string | null;
-  location: string | null;
-  workMode: string | null;
-  salary: string | null;
-  source: string | null;
-  notes: string | null;
-  followUpDate: string | null;
-  lastContactAt: string | null;
-  priority: string;
-  tags: string | null;
-};
-
-const STATUSES = ['applied', 'replied', 'interview', 'offer', 'rejected', 'expired', 'withdrawn', 'hired'];
-const JOB_TYPES = ['React Developer', 'React Native Developer', 'Frontend Developer', 'Web Developer'];
-const PRIORITIES = ['low', 'medium', 'high'];
-const PAGE_SIZE = 10;
-
-type Pagination = {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-};
-
-const formatDate = (value: string | null) => {
-  if (!value) return '—';
-  return new Date(value).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-};
-
-const daysUntilExpiry = (expiresAt: string) => {
-  const diff = new Date(expiresAt).getTime() - Date.now();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
-};
+type Application = ApplicationRecord;
+type Pagination = PaginationMeta;
 
 const statusVariant = (
   status: string
@@ -167,29 +130,24 @@ export default function ApplicationsPage() {
 
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.set('status', statusFilter);
-      if (search) params.set('search', search);
-      params.set('page', String(page));
-      params.set('limit', String(PAGE_SIZE));
-
-      const response = await fetch(`/api/applications?${params.toString()}`, {
-        signal: controller.signal,
+      const data = await fetchApplicationsList({
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        search: search || undefined,
+        page,
+        limit: PAGE_SIZE,
       });
-      const data = await response.json();
 
       if (controller.signal.aborted) return;
 
-      if (data.success) {
-        setApplications(data.applications);
-        setPagination(data.pagination);
-        if (data.statusCounts) setStatusCounts(data.statusCounts);
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to load applications' });
-      }
+      setApplications(data.applications);
+      setPagination(data.pagination);
+      if (data.statusCounts) setStatusCounts(data.statusCounts);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
-      setMessage({ type: 'error', text: 'Network error while loading applications' });
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Network error while loading applications',
+      });
     } finally {
       if (!controller.signal.aborted) {
         setLoading(false);
@@ -206,25 +164,23 @@ export default function ApplicationsPage() {
     setCheckingReplies(true);
     if (!silent) setMessage(null);
     try {
-      const response = await fetch('/api/check-replies', { method: 'POST' });
-      const data = await response.json();
+      const data = await checkInboxReplies();
 
-      if (data.success) {
-        if (data.matched > 0) {
-          setMessage({
-            type: 'success',
-            text: `${data.matched} reply(ies) found and marked as replied`,
-          });
-          await fetchApplications();
-        } else if (!silent) {
-          setMessage({ type: 'success', text: 'No new replies found in inbox' });
-        }
+      if (data.matched > 0) {
+        setMessage({
+          type: 'success',
+          text: `${data.matched} reply(ies) found and marked as replied`,
+        });
+        await fetchApplications();
       } else if (!silent) {
-        setMessage({ type: 'error', text: data.error || 'Failed to check replies' });
+        setMessage({ type: 'success', text: 'No new replies found in inbox' });
       }
-    } catch {
+    } catch (error) {
       if (!silent) {
-        setMessage({ type: 'error', text: 'Network error while checking replies' });
+        setMessage({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Failed to check replies',
+        });
       }
     } finally {
       setCheckingReplies(false);
@@ -234,8 +190,32 @@ export default function ApplicationsPage() {
   useEffect(() => {
     if (autoCheckedRef.current) return;
     autoCheckedRef.current = true;
-    checkReplies(true);
-  }, [checkReplies]);
+
+    void (async () => {
+      setCheckingReplies(true);
+      try {
+        const data = await checkInboxReplies();
+        if (data.matched > 0) {
+          await fetchApplicationsList({
+            status: statusFilter !== 'all' ? statusFilter : undefined,
+            search: search || undefined,
+            page,
+            limit: PAGE_SIZE,
+          }).then((result) => {
+            setApplications(result.applications);
+            setPagination(result.pagination);
+            if (result.statusCounts) setStatusCounts(result.statusCounts);
+          });
+        }
+      } catch {
+        // silent on auto-check
+      } finally {
+        setCheckingReplies(false);
+      }
+    })();
+    // Only run inbox check once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const clearFilters = () => {
     setSearchInput('');
@@ -278,27 +258,20 @@ export default function ApplicationsPage() {
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/applications/${editing.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          followUpDate: form.followUpDate || null,
-          lastContactAt: form.lastContactAt || null,
-        }),
+      await updateApplicationRecord(editing.id, {
+        ...form,
+        followUpDate: form.followUpDate || null,
+        lastContactAt: form.lastContactAt || null,
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Application updated' });
-        closeEdit();
-        fetchApplications();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to update' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error while saving' });
+      setMessage({ type: 'success', text: 'Application updated' });
+      closeEdit();
+      fetchApplications();
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Network error while saving',
+      });
     } finally {
       setSaving(false);
     }
@@ -316,18 +289,15 @@ export default function ApplicationsPage() {
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/applications/${deleting.id}`, { method: 'DELETE' });
-      const data = await response.json();
-
-      if (data.success) {
-        setMessage({ type: 'success', text: 'Application deleted' });
-        setDeleting(null);
-        fetchApplications();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Failed to delete' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Network error while deleting' });
+      await deleteApplicationRecord(deleting.id);
+      setMessage({ type: 'success', text: 'Application deleted' });
+      setDeleting(null);
+      fetchApplications();
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Network error while deleting',
+      });
     } finally {
       setDeletingInProgress(false);
     }
@@ -405,7 +375,7 @@ export default function ApplicationsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses ({totalAll})</SelectItem>
-                  {STATUSES.map((status) => (
+                  {APPLICATION_STATUSES.map((status) => (
                     <SelectItem key={status} value={status} className="capitalize">
                       {status} ({statusCounts[status] || 0})
                     </SelectItem>
@@ -648,7 +618,7 @@ export default function ApplicationsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUSES.map((status) => (
+                  {APPLICATION_STATUSES.map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
                     </SelectItem>
