@@ -3,7 +3,7 @@ import { sendEmail } from '@/lib/mailer';
 import { prisma } from '@/lib/prisma';
 import { getExpiryDate } from '@/lib/applications';
 import { companyNameFromEmail, extractDomain } from '@/lib/company';
-import { isValidJobType, templates } from '@/lib/job-templates';
+import { applyTemplate, textToHtml } from '@/lib/template-utils';
 import path from 'path';
 import fs from 'fs';
 
@@ -15,7 +15,7 @@ const isValidEmail = (email: string): boolean => {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { emails, jobType, recruiterPhone } = body;
+    const { emails, templateId, jobTitle, recruiterPhone } = body;
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
       return NextResponse.json(
@@ -24,9 +24,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!jobType) {
+    if (!templateId || typeof templateId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Job type is required' },
+        { success: false, error: 'Template is required' },
+        { status: 400 }
+      );
+    }
+
+    const resolvedJobTitle = typeof jobTitle === 'string' ? jobTitle.trim() : '';
+    if (!resolvedJobTitle) {
+      return NextResponse.json(
+        { success: false, error: 'Job title is required' },
         { status: 400 }
       );
     }
@@ -39,15 +47,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!isValidJobType(jobType)) {
+    const template = await prisma.emailTemplate.findUnique({ where: { id: templateId } });
+    if (!template) {
       return NextResponse.json(
-        { success: false, error: 'Invalid job type' },
-        { status: 400 }
+        { success: false, error: 'Template not found' },
+        { status: 404 }
       );
     }
 
-    const template = templates[jobType];
-    const htmlBody = template.body.replace(/\n/g, '<br>');
+    const subject = applyTemplate(template.subject, { jobTitle: resolvedJobTitle });
+    const plainBody = applyTemplate(template.body, { jobTitle: resolvedJobTitle });
+    const htmlBody = textToHtml(plainBody);
 
     const cvPath = path.join(process.cwd(), 'public', 'Musharraf-CV.pdf');
 
@@ -72,7 +82,7 @@ export async function POST(request: NextRequest) {
       try {
         const result = await sendEmail(
           normalizedEmail,
-          template.subject,
+          subject,
           htmlBody,
           [
             {
@@ -87,14 +97,14 @@ export async function POST(request: NextRequest) {
             email: normalizedEmail,
             domain,
             companyName,
-            jobType,
-            subject: template.subject,
+            jobType: template.name,
+            subject,
             status: 'applied',
             appliedAt,
             expiresAt,
             messageId: result.messageId,
             emailSent: true,
-            jobTitle: jobType,
+            jobTitle: resolvedJobTitle,
             source: 'email-sender',
             recruiterPhone: phone,
           },
@@ -115,14 +125,14 @@ export async function POST(request: NextRequest) {
             email: normalizedEmail,
             domain,
             companyName,
-            jobType,
-            subject: template.subject,
+            jobType: template.name,
+            subject,
             status: 'applied',
             appliedAt,
             expiresAt,
             emailSent: false,
             sendError: errorMessage,
-            jobTitle: jobType,
+            jobTitle: resolvedJobTitle,
             source: 'email-sender',
             recruiterPhone: phone,
           },

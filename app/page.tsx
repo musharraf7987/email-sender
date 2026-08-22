@@ -1,10 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { CheckCircle2, Loader2, Mail, Plus, Trash2, User } from 'lucide-react';
-import { JOB_TYPES } from '@/lib/job-templates';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  CheckCircle2,
+  FileText,
+  LayoutList,
+  Loader2,
+  Mail,
+  Paperclip,
+  Phone,
+  Plus,
+  Send,
+  Trash2,
+  User,
+} from 'lucide-react';
+import { applyTemplate } from '@/lib/template-utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -39,6 +52,14 @@ type DuplicateApp = {
   companyName: string | null;
 };
 
+type EmailTemplate = {
+  id: string;
+  name: string;
+  jobType: string;
+  subject: string;
+  body: string;
+};
+
 const formatAppliedDate = (value: string) =>
   new Date(value).toLocaleDateString('en-IN', {
     day: '2-digit',
@@ -48,7 +69,9 @@ const formatAppliedDate = (value: string) =>
 
 export default function Home() {
   const [emails, setEmails] = useState<string[]>(['']);
-  const [jobType, setJobType] = useState('React Developer');
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [templateId, setTemplateId] = useState('');
   const [recruiterPhone, setRecruiterPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -57,6 +80,50 @@ export default function Home() {
   const [duplicateDecisions, setDuplicateDecisions] = useState<Record<string, 'apply' | 'discard'>>({});
   const [pendingEmails, setPendingEmails] = useState<string[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === templateId) ?? null,
+    [templates, templateId]
+  );
+
+  const previewSubject = useMemo(() => {
+    if (!selectedTemplate) return '';
+    return applyTemplate(selectedTemplate.subject, { jobTitle: selectedTemplate.jobType });
+  }, [selectedTemplate]);
+
+  const previewBody = useMemo(() => {
+    if (!selectedTemplate) return '';
+    return applyTemplate(selectedTemplate.body, { jobTitle: selectedTemplate.jobType });
+  }, [selectedTemplate]);
+
+  const validEmailCount = useMemo(
+    () => emails.filter((email) => email.trim().length > 0).length,
+    [emails]
+  );
+
+  const fetchTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    try {
+      const response = await fetch('/api/templates');
+      const data = await response.json();
+      if (data.success && Array.isArray(data.templates) && data.templates.length > 0) {
+        setTemplates(data.templates);
+        setTemplateId((data.templates[0] as EmailTemplate).id);
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to load email templates' });
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchTemplates();
+  }, [fetchTemplates]);
+
+  const handleTemplateChange = (id: string) => {
+    setTemplateId(id);
+  };
 
   const addEmailField = () => {
     setEmails([...emails, '']);
@@ -81,11 +148,29 @@ export default function Home() {
       return;
     }
 
+    if (!templateId) {
+      setMessage({ type: 'error', text: 'Please select an email template' });
+      setLoading(false);
+      return;
+    }
+
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) {
+      setMessage({ type: 'error', text: 'Please select an email template' });
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails: emailsToSend, jobType, recruiterPhone }),
+        body: JSON.stringify({
+          emails: emailsToSend,
+          templateId,
+          jobTitle: template.jobType,
+          recruiterPhone,
+        }),
       });
 
       const data = await response.json();
@@ -128,6 +213,12 @@ export default function Home() {
 
     if (emailsToSend.length === 0) {
       setMessage({ type: 'error', text: 'Please enter at least one email address' });
+      setLoading(false);
+      return;
+    }
+
+    if (!templateId) {
+      setMessage({ type: 'error', text: 'Please select an email template' });
       setLoading(false);
       return;
     }
@@ -196,159 +287,328 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800/60 via-background to-background p-4 sm:p-6">
-      <Card className="w-full max-w-lg border-border/60 shadow-xl shadow-black/20">
-        <CardHeader className="space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800/50 via-background to-background">
+      {/* Top Navigation */}
+      <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15">
+              <Send className="h-4 w-4 text-primary" />
+            </div>
             <div>
-              <CardTitle className="text-xl sm:text-2xl">Job Application Email Sender</CardTitle>
-              <CardDescription className="mt-1.5">
-                Send tailored applications with your CV attached
-              </CardDescription>
-            </div>
-            <Button asChild variant="outline" size="sm" className="w-full sm:w-auto">
-              <Link href="/applications">View Tracker</Link>
-            </Button>
-          </div>
-
-          <div className="rounded-lg border border-border/60 bg-muted/50 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <User className="h-4 w-4 shrink-0 text-primary" />
-              Musharraf Ansari
-            </div>
-            <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-              <Mail className="h-4 w-4 shrink-0" />
-              <a
-                href="mailto:musharraf.code@gmail.com"
-                className="break-all hover:text-primary hover:underline"
-              >
-                musharraf.code@gmail.com
-              </a>
+              <h1 className="text-base font-semibold leading-tight sm:text-lg">Job Application Sender</h1>
+              <p className="hidden text-xs text-muted-foreground sm:block">Send tailored applications with CV</p>
             </div>
           </div>
-        </CardHeader>
 
-        <Separator />
-
-        <CardContent className="pt-6">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label>Recruiter Email Address(es)</Label>
-              {emails.map((email, index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    type="email"
-                    value={email}
-                    onChange={(e) => updateEmail(index, e.target.value)}
-                    placeholder="recruiter@company.com"
-                    disabled={loading}
-                    className="min-w-0"
-                  />
-                  {index === emails.length - 1 ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={addEmailField}
-                      disabled={loading}
-                      title="Add another email"
-                      className="shrink-0"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => removeEmailField(index)}
-                      disabled={loading}
-                      title="Remove this email"
-                      className="shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="recruiterPhone">
-                Recruiter Phone Number{' '}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="recruiterPhone"
-                type="tel"
-                value={recruiterPhone}
-                onChange={(e) => setRecruiterPhone(e.target.value)}
-                placeholder="+91 XXXXX XXXXX"
-                disabled={loading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="jobType">Job Type</Label>
-              <Select value={jobType} onValueChange={setJobType} disabled={loading}>
-                <SelectTrigger id="jobType">
-                  <SelectValue placeholder="Select job type" />
-                </SelectTrigger>
-                <SelectContent>
-                  {JOB_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={loading || emails.every((email) => !email.trim())}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                'Send Application(s)'
-              )}
+          <nav className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/templates">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Templates</span>
+              </Link>
             </Button>
-          </form>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/applications">
+                <LayoutList className="h-4 w-4" />
+                <span className="hidden sm:inline">Tracker</span>
+              </Link>
+            </Button>
+          </nav>
+        </div>
+      </header>
 
-          {message && (
-            <Alert
-              variant={message.type === 'success' ? 'success' : 'destructive'}
-              className="mt-5"
-            >
-              {message.type === 'success' && <CheckCircle2 className="h-4 w-4" />}
-              <AlertDescription>{message.text}</AlertDescription>
-            </Alert>
-          )}
-
-          {results.length > 0 && (
-            <div className="mt-5 space-y-2 rounded-lg border border-border/60 bg-muted/30 p-4">
-              <h3 className="text-sm font-semibold">Email Results</h3>
-              {results.map((result, index) => (
-                <div
-                  key={index}
-                  className={`rounded-md border px-3 py-2 text-sm ${
-                    result.success
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                      : 'border-red-500/30 bg-red-500/10 text-red-300'
-                  }`}
+      {/* Main Content */}
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:gap-8 lg:p-8">
+        {/* Left Panel — Form */}
+        <div className="flex w-full flex-col gap-6 lg:w-[420px] lg:shrink-0 xl:w-[460px]">
+          {/* Profile Card */}
+          <Card className="border-border/60 bg-card/50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                <User className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">Musharraf Ansari</p>
+                <a
+                  href="mailto:musharraf.code@gmail.com"
+                  className="flex items-center gap-1.5 truncate text-sm text-muted-foreground hover:text-primary hover:underline"
                 >
-                  <span className="font-medium">{result.email}:</span> {result.message}
+                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                  musharraf.code@gmail.com
+                </a>
+              </div>
+              <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">
+                <Paperclip className="mr-1 h-3 w-3" />
+                CV attached
+              </Badge>
+            </CardContent>
+          </Card>
+
+          {/* Send Form */}
+          <Card className="flex-1 border-border/60">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg">Compose Application</CardTitle>
+              <CardDescription>
+                Fill details below and preview your email on the right
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {templatesLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ))}
-            </div>
+              ) : templates.length === 0 ? (
+                <div className="space-y-4 py-8 text-center">
+                  <p className="text-sm text-muted-foreground">No email templates found.</p>
+                  <Button asChild>
+                    <Link href="/templates">Create Template</Link>
+                  </Button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                      Recruiter Email(s)
+                    </Label>
+                    <div className="space-y-2">
+                      {emails.map((email, index) => (
+                        <div key={index} className="flex gap-2">
+                          <Input
+                            type="email"
+                            value={email}
+                            onChange={(e) => updateEmail(index, e.target.value)}
+                            placeholder="recruiter@company.com"
+                            disabled={loading}
+                            className="min-w-0"
+                          />
+                          {index === emails.length - 1 ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={addEmailField}
+                              disabled={loading}
+                              title="Add another email"
+                              className="shrink-0"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => removeEmailField(index)}
+                              disabled={loading}
+                              title="Remove this email"
+                              className="shrink-0"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {validEmailCount > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {validEmailCount} recipient{validEmailCount > 1 ? 's' : ''} added
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="recruiterPhone" className="flex items-center gap-2">
+                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                      Recruiter Phone
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="recruiterPhone"
+                      type="tel"
+                      value={recruiterPhone}
+                      onChange={(e) => setRecruiterPhone(e.target.value)}
+                      placeholder="+91 XXXXX XXXXX"
+                      disabled={loading}
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template" className="flex items-center gap-2">
+                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      Email Template
+                    </Label>
+                    <Select value={templateId} onValueChange={handleTemplateChange} disabled={loading}>
+                      <SelectTrigger id="template">
+                        <SelectValue placeholder="Select template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {templates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    size="lg"
+                    disabled={loading || emails.every((email) => !email.trim()) || !templateId}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        Send Application{validEmailCount > 1 ? 's' : ''}
+                        {validEmailCount > 0 && ` (${validEmailCount})`}
+                      </>
+                    )}
+                  </Button>
+                </form>
+              )}
+
+              {message && (
+                <Alert
+                  variant={message.type === 'success' ? 'success' : 'destructive'}
+                  className="mt-5"
+                >
+                  {message.type === 'success' && <CheckCircle2 className="h-4 w-4" />}
+                  <AlertDescription>{message.text}</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Results — mobile / sidebar */}
+          {results.length > 0 && (
+            <Card className="border-border/60 lg:hidden">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Send Results</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {results.map((result, index) => (
+                  <div
+                    key={index}
+                    className={`rounded-md border px-3 py-2 text-sm ${
+                      result.success
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                        : 'border-red-500/30 bg-red-500/10 text-red-300'
+                    }`}
+                  >
+                    <span className="font-medium">{result.email}:</span> {result.message}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Right Panel — Live Preview */}
+        <div className="flex min-h-0 flex-1 flex-col gap-6">
+          <Card className="flex flex-1 flex-col border-border/60">
+            <CardHeader className="border-b border-border/40 pb-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg">Email Preview</CardTitle>
+                  <CardDescription className="mt-1">
+                    Live preview — updates when you change template
+                  </CardDescription>
+                </div>
+                {selectedTemplate && (
+                  <Badge variant="secondary">{selectedTemplate.name}</Badge>
+                )}
+              </div>
+            </CardHeader>
+
+            <CardContent className="flex flex-1 flex-col p-0">
+              {!selectedTemplate ? (
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
+                    <Mail className="h-7 w-7 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Select a template to see preview
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-1 flex-col">
+                  {/* Email header mockup */}
+                  <div className="space-y-3 border-b border-border/40 bg-muted/20 px-6 py-4">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">From: </span>
+                        <span className="font-medium">Musharraf &lt;musharraf.code@gmail.com&gt;</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">To: </span>
+                        <span>
+                          {validEmailCount > 0
+                            ? emails.filter((e) => e.trim()).join(', ')
+                            : 'recruiter@company.com'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Subject: </span>
+                      <span className="font-semibold text-foreground">{previewSubject}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Paperclip className="h-3.5 w-3.5" />
+                      Musharraf-CV.pdf
+                    </div>
+                  </div>
+
+                  {/* Email body */}
+                  <div className="flex-1 overflow-y-auto px-6 py-5">
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/90">
+                      {previewBody}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Results — desktop */}
+          {results.length > 0 && (
+            <Card className="hidden border-border/60 lg:block">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Send Results</CardTitle>
+                <CardDescription>
+                  {results.filter((r) => r.success).length} of {results.length} sent successfully
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {results.map((result, index) => (
+                    <div
+                      key={index}
+                      className={`rounded-md border px-3 py-2.5 text-sm ${
+                        result.success
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                          : 'border-red-500/30 bg-red-500/10 text-red-300'
+                      }`}
+                    >
+                      <span className="font-medium">{result.email}</span>
+                      <p className="mt-0.5 text-xs opacity-80">{result.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </main>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && cancelDuplicates()}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
