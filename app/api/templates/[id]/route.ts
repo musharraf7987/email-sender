@@ -4,6 +4,7 @@ import {
   getTemplate,
   updateTemplate,
 } from '@/features/templates/template.use-case';
+import { requireTemplatesAuth } from '@/lib/templates-auth-guard';
 import { withApiHandler } from '@/lib/api/handler';
 import { ok } from '@/lib/api/response';
 
@@ -18,6 +19,7 @@ export const GET = withApiHandler(async (_request: NextRequest, context?: RouteC
 });
 
 export const PATCH = withApiHandler(async (request: NextRequest, context?: RouteContext) => {
+  await requireTemplatesAuth();
   const { id } = await context!.params;
   const body = await request.json();
   const template = await updateTemplate(id, body);
@@ -25,6 +27,7 @@ export const PATCH = withApiHandler(async (request: NextRequest, context?: Route
 });
 
 export const DELETE = withApiHandler(async (_request: NextRequest, context?: RouteContext) => {
+  await requireTemplatesAuth();
   const { id } = await context!.params;
   await deleteTemplate(id);
   return ok({});

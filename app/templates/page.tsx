@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { AppHeader } from '@/components/app-header';
+import { TemplatesPasswordGate } from '@/components/templates-password-gate';
 import {
   deleteTemplate,
   fetchTemplates,
@@ -182,6 +183,7 @@ export default function TemplatesPage() {
         }
       />
 
+      <TemplatesPasswordGate>
       <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8">
         {message && (
           <Alert variant={message.type === 'success' ? 'success' : 'destructive'}>
@@ -417,6 +419,7 @@ export default function TemplatesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </TemplatesPasswordGate>
     </div>
   );
 }

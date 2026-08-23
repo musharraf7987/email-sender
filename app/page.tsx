@@ -23,6 +23,7 @@ import { formatDate } from '@/lib/format';
 import { applyTemplate } from '@/lib/template-utils';
 import type { DuplicateApplication, EmailTemplate, SendEmailResult } from '@/types';
 import { AppHeader } from '@/components/app-header';
+import { TemplatesNavButton } from '@/components/templates-password-gate';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -302,9 +303,7 @@ export default function Home() {
               ) : templates.length === 0 ? (
                 <div className="space-y-4 py-8 text-center">
                   <p className="text-sm text-muted-foreground">No email templates found.</p>
-                  <Button asChild>
-                    <Link href="/templates">Create Template</Link>
-                  </Button>
+                  <TemplatesNavButton variant="default" label="Create Template" />
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-5">
