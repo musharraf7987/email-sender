@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   FileText,
-  LayoutList,
   Loader2,
   Mail,
   Paperclip,
@@ -23,6 +22,7 @@ import {
 import { formatDate } from '@/lib/format';
 import { applyTemplate } from '@/lib/template-utils';
 import type { DuplicateApplication, EmailTemplate, SendEmailResult } from '@/types';
+import { AppHeader } from '@/components/app-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -253,35 +253,11 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800/50 via-background to-background">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15">
-              <Send className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-base font-semibold leading-tight sm:text-lg">Job Application Sender</h1>
-              <p className="hidden text-xs text-muted-foreground sm:block">Send tailored applications with CV</p>
-            </div>
-          </div>
-
-          <nav className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/templates">
-                <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">Templates</span>
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/applications">
-                <LayoutList className="h-4 w-4" />
-                <span className="hidden sm:inline">Tracker</span>
-              </Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <AppHeader
+        title="Job Application Sender"
+        subtitle="Send tailored applications with CV"
+        icon={<Send className="h-4 w-4 text-primary" />}
+      />
 
       {/* Main Content */}
       <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 p-4 sm:p-6 lg:flex-row lg:gap-8 lg:p-8">

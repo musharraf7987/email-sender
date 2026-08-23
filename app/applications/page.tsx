@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, MailCheck, Search, X } from 'lucide-react';
+import {
+  LayoutList,
+  Loader2,
+  MailCheck,
+  Search,
+  Send,
+  X,
+} from 'lucide-react';
+import { AppHeader } from '@/components/app-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -304,20 +312,23 @@ export default function ApplicationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800/60 via-background to-background p-4 sm:p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Application Tracker</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Records auto-expire to <strong>expired</strong> after 15 days if still &quot;applied&quot;.
-              Inbox replies are auto-detected.
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+    <div className="flex min-h-screen flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800/50 via-background to-background">
+      <AppHeader
+        title="Application Tracker"
+        subtitle="Track applications, replies & auto-expiry"
+        icon={<LayoutList className="h-4 w-4 text-primary" />}
+        hiddenNavHrefs={['/']}
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/">
+                <Send className="h-4 w-4" />
+                <span className="hidden sm:inline">Send Application</span>
+              </Link>
+            </Button>
             <Button
               variant="secondary"
-              className="w-full sm:w-auto"
+              size="sm"
               onClick={() => checkReplies(false)}
               disabled={checkingReplies}
             >
@@ -326,81 +337,78 @@ export default function ApplicationsPage() {
               ) : (
                 <MailCheck className="h-4 w-4" />
               )}
-              {checkingReplies ? 'Checking...' : 'Check Replies'}
+              <span className="hidden sm:inline">
+                {checkingReplies ? 'Checking...' : 'Check Replies'}
+              </span>
             </Button>
-            <Button asChild variant="outline" className="w-full sm:w-auto">
-              <Link href="/">
-                <ArrowLeft className="h-4 w-4" />
-                Send Application
-              </Link>
-            </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        <Card className="border-border/60">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-lg">Filters</CardTitle>
-                <CardDescription>Search and filter your applications</CardDescription>
-              </div>
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearFilters}>
-                  <X className="h-4 w-4" />
-                  Clear
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="pl-9"
-                  placeholder="Search email, company, domain..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                />
-              </div>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) => {
-                  setStatusFilter(value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses ({totalAll})</SelectItem>
-                  {APPLICATION_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status} className="capitalize">
-                      {status} ({statusCounts[status] || 0})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
+      <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8">
         {message && (
           <Alert variant={message.type === 'success' ? 'success' : 'destructive'}>
             <AlertDescription>{message.text}</AlertDescription>
           </Alert>
         )}
 
-        <Card className="border-border/60">
-          <CardContent className="p-0">
+        {/* Main table card — fills remaining height */}
+        <Card className="flex min-h-0 flex-1 flex-col border-border/60">
+          <CardHeader className="border-b border-border/40 pb-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <CardTitle className="text-lg">Applications</CardTitle>
+                <CardDescription>
+                  Auto-expire after 15 days · Inbox replies detected automatically
+                </CardDescription>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="relative flex-1 sm:min-w-[280px]">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-9"
+                    placeholder="Search email, company, domain..."
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                  />
+                </div>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value);
+                    setPage(1);
+                  }}
+                >
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses ({totalAll})</SelectItem>
+                    {APPLICATION_STATUSES.map((status) => (
+                      <SelectItem key={status} value={status} className="capitalize">
+                        {status} ({statusCounts[status] || 0})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {hasActiveFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <X className="h-4 w-4" />
+                    Clear
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="flex min-h-0 flex-1 flex-col p-0">
             {loading ? (
-              <div className="flex items-center justify-center gap-2 p-12 text-muted-foreground">
+              <div className="flex flex-1 items-center justify-center gap-2 p-16 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 Loading applications...
               </div>
             ) : applications.length === 0 ? (
-              <div className="space-y-3 p-12 text-center text-muted-foreground">
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 p-16 text-center text-muted-foreground">
                 <p>
                   {hasActiveFilters
                     ? statusFilter === 'replied' && (statusCounts.replied || 0) === 0
@@ -467,9 +475,9 @@ export default function ApplicationsPage() {
                 </div>
 
                 {/* Desktop table */}
-                <div className="hidden overflow-x-auto md:block">
+                <div className="hidden min-h-0 flex-1 overflow-auto md:block">
                   <table className="w-full text-sm">
-                    <thead>
+                    <thead className="sticky top-0 z-[1] bg-muted/80 backdrop-blur-sm">
                       <tr className="border-b bg-muted/40 text-left">
                         <th className="px-4 py-3 font-medium text-muted-foreground">Company</th>
                         <th className="px-4 py-3 font-medium text-muted-foreground">Email</th>
@@ -561,7 +569,7 @@ export default function ApplicationsPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </main>
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && closeEdit()}>
         <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto">
