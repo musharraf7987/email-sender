@@ -20,7 +20,10 @@ type AuthStatus = {
 };
 
 async function fetchAuthStatus(): Promise<AuthStatus> {
-  const response = await fetch('/api/templates/auth');
+  const response = await fetch('/api/templates/auth', {
+    cache: 'no-store',
+    credentials: 'same-origin',
+  });
   const data = await response.json();
   if (!data.success) throw new Error(data.error || 'Failed to check access');
   return { authenticated: data.authenticated, protected: data.protected };
@@ -30,6 +33,8 @@ async function unlockTemplates(password: string): Promise<void> {
   const response = await fetch('/api/templates/auth', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    cache: 'no-store',
     body: JSON.stringify({ password }),
   });
   const data = await response.json();
@@ -214,6 +219,18 @@ export function TemplatesPasswordGate({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     void refresh();
+
+    const interval = setInterval(() => {
+      void refresh();
+    }, 5000);
+
+    const onFocus = () => void refresh();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [refresh]);
 
   if (!status) {
@@ -275,7 +292,7 @@ export function TemplatesNavButton({
     setChecking(true);
     try {
       const status = await fetchAuthStatus();
-      if (!status.protected || status.authenticated) {
+      if (status.protected && status.authenticated) {
         onNavigate?.();
         router.push('/templates');
         return;

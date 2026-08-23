@@ -1,10 +1,10 @@
 import { cookies } from 'next/headers';
+import { clearTemplatesAuthCookieOptions, TEMPLATES_AUTH_COOKIE } from '@/lib/templates-auth';
 import { withApiHandler } from '@/lib/api/handler';
 import { ok, fail } from '@/lib/api/response';
 import {
   isTemplatesProtectionEnabled,
   setTemplatesAuthCookie,
-  TEMPLATES_AUTH_COOKIE,
   verifyAuthToken,
   verifyTemplatesPassword,
 } from '@/lib/templates-auth-guard';
@@ -12,9 +12,16 @@ import {
 export const dynamic = 'force-dynamic';
 
 export const GET = withApiHandler(async () => {
-  const token = (await cookies()).get(TEMPLATES_AUTH_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(TEMPLATES_AUTH_COOKIE)?.value;
+  const authenticated = verifyAuthToken(token);
+
+  if (!authenticated && token) {
+    cookieStore.set(TEMPLATES_AUTH_COOKIE, '', clearTemplatesAuthCookieOptions());
+  }
+
   return ok({
-    authenticated: verifyAuthToken(token),
+    authenticated,
     protected: isTemplatesProtectionEnabled(),
   });
 });
