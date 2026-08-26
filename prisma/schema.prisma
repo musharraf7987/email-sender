@@ -38,6 +38,7 @@ model Application {
   replySubject  String?
   replyBody     String?
   replyAt       DateTime?
+  whatsappNotifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

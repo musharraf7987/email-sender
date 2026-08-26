@@ -1,5 +1,6 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { notifyReplyAlerts } from '@/features/notifications/notify-reply-alerts';
 import { prisma } from '@/lib/prisma';
 
 const LOOKBACK_DAYS = 45;
@@ -18,6 +19,10 @@ export type ReplyCheckResult = {
     matchedBy: 'messageId' | 'email';
   }>;
   skippedAutoReplies: number;
+  whatsappNotified: number;
+  whatsappFailed: number;
+  telegramNotified: number;
+  telegramFailed: number;
 };
 
 type PendingMatch = {
@@ -116,7 +121,16 @@ export async function checkInboxReplies(): Promise<ReplyCheckResult> {
   });
 
   if (applications.length === 0) {
-    return { scanned: 0, matched: 0, updated: [], skippedAutoReplies: 0 };
+    return {
+      scanned: 0,
+      matched: 0,
+      updated: [],
+      skippedAutoReplies: 0,
+      whatsappNotified: 0,
+      whatsappFailed: 0,
+      telegramNotified: 0,
+      telegramFailed: 0,
+    };
   }
 
   const messageIdMap = new Map<string, (typeof applications)[number]>();
@@ -156,7 +170,16 @@ export async function checkInboxReplies(): Promise<ReplyCheckResult> {
     try {
       const uids = await client.search({ since }, { uid: true });
       if (!uids || uids.length === 0) {
-        return { scanned: 0, matched: 0, updated: [], skippedAutoReplies: 0 };
+        return {
+          scanned: 0,
+          matched: 0,
+          updated: [],
+          skippedAutoReplies: 0,
+          whatsappNotified: 0,
+          whatsappFailed: 0,
+          telegramNotified: 0,
+          telegramFailed: 0,
+        };
       }
 
       for await (const msg of client.fetch(
@@ -275,6 +298,11 @@ export async function checkInboxReplies(): Promise<ReplyCheckResult> {
     }
   }
 
+  let whatsappNotified = 0;
+  let whatsappFailed = 0;
+  let telegramNotified = 0;
+  let telegramFailed = 0;
+
   if (pending.length > 0) {
     const now = new Date();
     await prisma.$transaction(
@@ -292,6 +320,28 @@ export async function checkInboxReplies(): Promise<ReplyCheckResult> {
         })
       )
     );
+
+    for (const item of pending) {
+      const alerts = await notifyReplyAlerts({
+        email: item.app.email,
+        companyName: item.app.companyName,
+        replySubject: item.replySubject,
+        replyFrom: item.replyFrom,
+      });
+
+      if (alerts.telegram.success) telegramNotified += 1;
+      else if (!alerts.telegram.skipped) telegramFailed += 1;
+
+      if (alerts.whatsapp.success) whatsappNotified += 1;
+      else if (!alerts.whatsapp.skipped) whatsappFailed += 1;
+
+      if (alerts.notified) {
+        await prisma.application.update({
+          where: { id: item.app.id },
+          data: { whatsappNotifiedAt: new Date() },
+        });
+      }
+    }
   }
 
   return {
@@ -304,5 +354,9 @@ export async function checkInboxReplies(): Promise<ReplyCheckResult> {
       matchedBy: item.matchedBy,
     })),
     skippedAutoReplies,
+    whatsappNotified,
+    whatsappFailed,
+    telegramNotified,
+    telegramFailed,
   };
 }

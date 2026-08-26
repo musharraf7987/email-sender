@@ -112,7 +112,7 @@ export default function ApplicationsPage() {
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [checkingReplies, setCheckingReplies] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-  const autoCheckedRef = useRef(false);
+  const pollInFlightRef = useRef(false);
 
   const hasActiveFilters = statusFilter !== 'all' || search.trim().length > 0;
   const totalAll = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
@@ -169,8 +169,14 @@ export default function ApplicationsPage() {
   }, [fetchApplications]);
 
   const checkReplies = useCallback(async (silent = false) => {
-    setCheckingReplies(true);
-    if (!silent) setMessage(null);
+    if (pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+
+    if (!silent) {
+      setCheckingReplies(true);
+      setMessage(null);
+    }
+
     try {
       const data = await checkInboxReplies();
 
@@ -191,39 +197,33 @@ export default function ApplicationsPage() {
         });
       }
     } finally {
-      setCheckingReplies(false);
+      pollInFlightRef.current = false;
+      if (!silent) {
+        setCheckingReplies(false);
+      }
     }
   }, [fetchApplications]);
 
+  // Auto-poll inbox every 60s while tracker is open (+ once on mount)
   useEffect(() => {
-    if (autoCheckedRef.current) return;
-    autoCheckedRef.current = true;
+    const POLL_MS = 60_000;
 
-    void (async () => {
-      setCheckingReplies(true);
-      try {
-        const data = await checkInboxReplies();
-        if (data.matched > 0) {
-          await fetchApplicationsList({
-            status: statusFilter !== 'all' ? statusFilter : undefined,
-            search: search || undefined,
-            page,
-            limit: PAGE_SIZE,
-          }).then((result) => {
-            setApplications(result.applications);
-            setPagination(result.pagination);
-            if (result.statusCounts) setStatusCounts(result.statusCounts);
-          });
-        }
-      } catch {
-        // silent on auto-check
-      } finally {
-        setCheckingReplies(false);
-      }
-    })();
-    // Only run inbox check once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void checkReplies(true);
+
+    const interval = setInterval(() => {
+      void checkReplies(true);
+    }, POLL_MS);
+
+    const onFocus = () => {
+      void checkReplies(true);
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [checkReplies]);
 
   const clearFilters = () => {
     setSearchInput('');

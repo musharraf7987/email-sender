@@ -27,10 +27,17 @@ async function handleCheck(request: NextRequest) {
   }
 
   const result = await checkInboxReplies();
+  const notes: string[] = [];
+  if (result.telegramNotified > 0) notes.push(`Telegram: ${result.telegramNotified}`);
+  if (result.telegramFailed > 0) notes.push(`Telegram failed: ${result.telegramFailed}`);
+  if (result.whatsappNotified > 0) notes.push(`WhatsApp: ${result.whatsappNotified}`);
+  if (result.whatsappFailed > 0) notes.push(`WhatsApp failed: ${result.whatsappFailed}`);
+  const alertNote = notes.length > 0 ? ` · ${notes.join(' · ')}` : '';
+
   return ok({
     message:
       result.matched > 0
-        ? `Found ${result.matched} new reply(ies)`
+        ? `Found ${result.matched} new reply(ies)${alertNote}`
         : 'No new replies found',
     ...result,
   });
