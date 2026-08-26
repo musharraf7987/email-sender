@@ -169,13 +169,18 @@ export default function ApplicationsPage() {
   }, [fetchApplications]);
 
   const checkReplies = useCallback(async (silent = false) => {
-    if (pollInFlightRef.current) return;
-    pollInFlightRef.current = true;
-
-    if (!silent) {
+    if (silent) {
+      if (pollInFlightRef.current) return;
+    } else {
+      // Show loader immediately on click (mobile + desktop)
       setCheckingReplies(true);
       setMessage(null);
+      while (pollInFlightRef.current) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
     }
+
+    pollInFlightRef.current = true;
 
     try {
       const data = await checkInboxReplies();
@@ -320,25 +325,39 @@ export default function ApplicationsPage() {
         hiddenNavHrefs={['/']}
         actions={
           <>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm" className="px-2.5 sm:px-3">
               <Link href="/">
                 <Send className="h-4 w-4" />
                 <span className="hidden sm:inline">Send Application</span>
               </Link>
             </Button>
             <Button
+              type="button"
               variant="secondary"
               size="sm"
-              onClick={() => checkReplies(false)}
+              className="gap-1.5 px-2.5 sm:px-3"
+              onClick={() => void checkReplies(false)}
               disabled={checkingReplies}
+              aria-busy={checkingReplies}
+              aria-label={checkingReplies ? 'Checking replies' : 'Check Replies'}
             >
               {checkingReplies ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
               ) : (
-                <MailCheck className="h-4 w-4" />
+                <MailCheck className="h-4 w-4 shrink-0" />
               )}
-              <span className="hidden sm:inline">
-                {checkingReplies ? 'Checking...' : 'Check Replies'}
+              <span className="text-xs sm:text-sm">
+                {checkingReplies ? (
+                  <>
+                    <span className="sm:hidden">Checking</span>
+                    <span className="hidden sm:inline">Checking...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="sm:hidden">Replies</span>
+                    <span className="hidden sm:inline">Check Replies</span>
+                  </>
+                )}
               </span>
             </Button>
           </>

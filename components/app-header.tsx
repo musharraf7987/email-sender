@@ -138,9 +138,10 @@ export function AppHeader({ title, subtitle, icon, actions, hiddenNavHrefs = [] 
             </div>
           </div>
 
-          <div className="hidden shrink-0 items-center gap-2 md:flex">
+          {/* Actions once in header (mobile + desktop) so loaders/state stay in sync */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             {actions}
-            <nav className="flex items-center gap-1 sm:gap-2">
+            <nav className="hidden items-center gap-1 sm:gap-2 md:flex">
               {navItems.map((item) => renderNavItem(item, false))}
             </nav>
           </div>
@@ -191,16 +192,6 @@ export function AppHeader({ title, subtitle, icon, actions, hiddenNavHrefs = [] 
             {navItems.map((item) => renderNavItem(item, true))}
           </nav>
 
-          {actions && (
-            <div className="shrink-0 border-t border-border/60 p-4">
-              <p className="mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Actions
-              </p>
-              <div className="flex flex-col gap-2 [&_button]:w-full [&_button]:justify-start">
-                {actions}
-              </div>
-            </div>
-          )}
         </aside>
       </div>
     </>
