@@ -327,6 +327,7 @@ export async function checkInboxReplies(): Promise<ReplyCheckResult> {
         companyName: item.app.companyName,
         replySubject: item.replySubject,
         replyFrom: item.replyFrom,
+        replyBody: item.replyBody,
       });
 
       if (alerts.telegram.success) telegramNotified += 1;

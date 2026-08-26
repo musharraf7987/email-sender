@@ -1,5 +1,6 @@
 import {
   formatReplyAlertMessage,
+  WHATSAPP_BODY_MAX_CHARS,
   type NotifySendResult,
   type ReplyNotifyInput,
 } from '@/features/notifications/format-reply-alert';
@@ -72,5 +73,10 @@ export async function sendWhatsAppMessage(text: string): Promise<WhatsAppSendRes
 export async function notifyReplyOnWhatsApp(
   input: WhatsAppNotifyInput
 ): Promise<WhatsAppSendResult> {
-  return sendWhatsAppMessage(formatReplyAlertMessage(input));
+  return sendWhatsAppMessage(
+    formatReplyAlertMessage(input, {
+      includeBody: true,
+      bodyMaxChars: WHATSAPP_BODY_MAX_CHARS,
+    })
+  );
 }
