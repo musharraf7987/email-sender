@@ -11,7 +11,7 @@ import { applyTemplate, textToHtml } from '@/lib/template-utils';
 import { normalizeEmail } from '@/lib/validators/email';
 import type { SendEmailResult } from '@/types';
 
-const CV_FILENAME = 'Musharraf-CV.pdf';
+const CV_FILENAME = process.env.CV_FILENAME ?? 'Musharraf-CV.pdf';
 
 function loadCvBuffer(): Buffer {
   const cvPath = path.join(process.cwd(), 'public', CV_FILENAME);

@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ChevronDown,
+  ChevronUp,
   FileText,
   Loader2,
   Mail,
+  Paperclip,
   Pencil,
   Plus,
   Save,
@@ -67,6 +70,7 @@ export default function TemplatesPage() {
   const [deletingTemplate, setDeletingTemplate] = useState<EmailTemplate | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [previewJobTitle, setPreviewJobTitle] = useState('React Developer');
+  const [cvOpen, setCvOpen] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -185,6 +189,46 @@ export default function TemplatesPage() {
 
       <TemplatesPasswordGate>
       <main className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col gap-6 p-4 sm:p-6 lg:p-8">
+        {/* CV Viewer */}
+        <Card className="border-border/60 bg-card/50">
+          <CardHeader
+            className="cursor-pointer select-none pb-4"
+            onClick={() => setCvOpen((prev) => !prev)}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15">
+                  <Paperclip className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">CV / Resume Preview</CardTitle>
+                  <CardDescription className="text-xs">
+                    This is the file currently attached to all outgoing application emails
+                  </CardDescription>
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" className="shrink-0" tabIndex={-1}>
+                {cvOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {cvOpen ? 'Hide' : 'View CV'}
+              </Button>
+            </div>
+          </CardHeader>
+          {cvOpen && (
+            <CardContent className="pt-0">
+              <div className="overflow-hidden rounded-lg border border-border/60">
+                <iframe
+                  src="/Musharraf-CV.pdf"
+                  title="CV Preview"
+                  className="h-[80vh] w-full"
+                />
+              </div>
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                To update, replace <code className="rounded bg-muted px-1 py-0.5 font-mono">public/Musharraf-CV.pdf</code> with your new PDF
+              </p>
+            </CardContent>
+          )}
+        </Card>
+
         {message && (
           <Alert variant={message.type === 'success' ? 'success' : 'destructive'}>
             <AlertDescription>{message.text}</AlertDescription>
