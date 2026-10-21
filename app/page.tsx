@@ -16,12 +16,13 @@ import {
 } from 'lucide-react';
 import {
   checkDuplicateEmails,
+  fetchResumes,
   fetchTemplates,
   sendBulkEmails,
 } from '@/hooks/use-api';
 import { formatDate } from '@/lib/format';
 import { applyTemplate } from '@/lib/template-utils';
-import type { DuplicateApplication, EmailTemplate, SendEmailResult } from '@/types';
+import type { DuplicateApplication, EmailTemplate, ResumeMeta, SendEmailResult } from '@/types';
 import { AppHeader } from '@/components/app-header';
 import { TemplatesNavButton } from '@/components/templates-password-gate';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -55,6 +56,7 @@ import { Separator } from '@/components/ui/separator';
 export default function Home() {
   const [emails, setEmails] = useState<string[]>(['']);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
+  const [resumes, setResumes] = useState<ResumeMeta[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [templateId, setTemplateId] = useState('');
   const [recruiterPhone, setRecruiterPhone] = useState('');
@@ -70,6 +72,18 @@ export default function Home() {
     () => templates.find((template) => template.id === templateId) ?? null,
     [templates, templateId]
   );
+
+  const defaultResume = useMemo(
+    () => resumes.find((resume) => resume.isDefault) ?? resumes[0] ?? null,
+    [resumes]
+  );
+
+  const attachedResumeName = useMemo(() => {
+    if (!selectedTemplate) return 'No resume';
+    if (selectedTemplate.resume?.name) return selectedTemplate.resume.name;
+    if (defaultResume) return `${defaultResume.name} (default)`;
+    return 'Fallback CV / Musharraf-CV.pdf';
+  }, [selectedTemplate, defaultResume]);
 
   const previewSubject = useMemo(() => {
     if (!selectedTemplate) return '';
@@ -89,7 +103,8 @@ export default function Home() {
   const loadTemplates = useCallback(async () => {
     setTemplatesLoading(true);
     try {
-      const loaded = await fetchTemplates();
+      const [loaded, loadedResumes] = await Promise.all([fetchTemplates(), fetchResumes()]);
+      setResumes(loadedResumes);
       if (loaded.length > 0) {
         setTemplates(loaded);
         setTemplateId(loaded[0].id);
@@ -504,7 +519,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Paperclip className="h-3.5 w-3.5" />
-                      Musharraf-CV.pdf
+                      {attachedResumeName}
                     </div>
                   </div>
 

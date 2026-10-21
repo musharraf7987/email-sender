@@ -50,14 +50,32 @@ model Application {
   @@index([expiresAt])
 }
 
+model Resume {
+  id        String   @id @default(cuid())
+  name      String
+  data      Bytes
+  mimeType  String   @default("application/pdf")
+  size      Int
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  templates EmailTemplate[]
+
+  @@index([isDefault])
+}
+
 model EmailTemplate {
   id        String   @id @default(cuid())
   name      String
   jobType   String
   subject   String
   body      String
+  resumeId  String?
+  resume    Resume?  @relation(fields: [resumeId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([name])
+  @@index([resumeId])
 }

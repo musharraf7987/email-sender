@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TEMPLATES_PIN_LENGTH } from '@/lib/templates-auth.constants';
+import { TEMPLATES_IDLE_SECONDS, TEMPLATES_PIN_LENGTH } from '@/lib/templates-auth.constants';
 import { cn } from '@/lib/utils';
 
 type AuthStatus = {
@@ -41,6 +41,14 @@ async function unlockTemplates(password: string): Promise<void> {
   if (!response.ok || !data.success) {
     throw new Error(data.error || 'Incorrect PIN');
   }
+}
+
+async function lockTemplates(): Promise<void> {
+  await fetch('/api/templates/auth', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    cache: 'no-store',
+  });
 }
 
 function PinDots({ filled, shake }: { filled: number; shake: boolean }) {
@@ -217,12 +225,20 @@ export function TemplatesPasswordGate({ children }: { children: React.ReactNode 
     setStatus(next);
   }, []);
 
+  const lockNow = useCallback(async () => {
+    try {
+      await lockTemplates();
+    } finally {
+      setStatus({ authenticated: false, protected: true });
+    }
+  }, []);
+
   useEffect(() => {
     void refresh();
 
     const interval = setInterval(() => {
       void refresh();
-    }, 5000);
+    }, 15000);
 
     const onFocus = () => void refresh();
     window.addEventListener('focus', onFocus);
@@ -232,6 +248,41 @@ export function TemplatesPasswordGate({ children }: { children: React.ReactNode 
       window.removeEventListener('focus', onFocus);
     };
   }, [refresh]);
+
+  // Idle lock: no activity for 3 minutes → lock templates
+  useEffect(() => {
+    if (!status?.authenticated || !status.protected) return;
+
+    let idleTimer: ReturnType<typeof setTimeout>;
+
+    const resetIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        void lockNow();
+      }, TEMPLATES_IDLE_SECONDS * 1000);
+    };
+
+    const events: Array<keyof WindowEventMap> = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'scroll',
+      'touchstart',
+      'click',
+    ];
+
+    resetIdle();
+    for (const event of events) {
+      window.addEventListener(event, resetIdle, { passive: true });
+    }
+
+    return () => {
+      clearTimeout(idleTimer);
+      for (const event of events) {
+        window.removeEventListener(event, resetIdle);
+      }
+    };
+  }, [status?.authenticated, status?.protected, lockNow]);
 
   if (!status) {
     return (
@@ -256,6 +307,9 @@ export function TemplatesPasswordGate({ children }: { children: React.ReactNode 
             <h2 className="text-xl font-semibold">Templates Locked</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Enter {TEMPLATES_PIN_LENGTH}-digit PIN to manage templates
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Locks after 3 min idle, or 10 min max session
             </p>
           </div>
         </div>

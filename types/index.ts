@@ -1,6 +1,20 @@
-import type { Application, EmailTemplate } from '@prisma/client';
+import type { Application, EmailTemplate as PrismaEmailTemplate } from '@prisma/client';
 
-export type { Application, EmailTemplate };
+export type { Application };
+
+export type ResumeMeta = {
+  id: string;
+  name: string;
+  mimeType?: string;
+  size: number;
+  isDefault: boolean;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+export type EmailTemplate = PrismaEmailTemplate & {
+  resume?: Pick<ResumeMeta, 'id' | 'name' | 'size' | 'isDefault'> | null;
+};
 
 export type DuplicateApplication = Pick<
   Application,

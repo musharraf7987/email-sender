@@ -4,6 +4,7 @@ import type {
   DuplicateApplication,
   EmailTemplate,
   PaginationMeta,
+  ResumeMeta,
   SendEmailResult,
 } from '@/types';
 
@@ -19,7 +20,13 @@ export async function fetchTemplates(): Promise<EmailTemplate[]> {
 }
 
 export async function saveTemplate(
-  form: { name: string; jobType: string; subject: string; body: string },
+  form: {
+    name: string;
+    jobType: string;
+    subject: string;
+    body: string;
+    resumeId?: string | null;
+  },
   editingId?: string | null
 ) {
   const url = editingId ? `/api/templates/${editingId}` : '/api/templates';
@@ -32,6 +39,44 @@ export async function saveTemplate(
   const data = await parseJson<ApiSuccess<{ template: EmailTemplate }> | ApiError>(response);
   if (!data.success) throw new Error(data.error);
   return data.template;
+}
+
+export async function fetchResumes(): Promise<ResumeMeta[]> {
+  const response = await fetch('/api/resumes');
+  const data = await parseJson<ApiSuccess<{ resumes: ResumeMeta[] }> | ApiError>(response);
+  if (!data.success) throw new Error(data.error);
+  return data.resumes;
+}
+
+export async function uploadResumeFile(file: File, isDefault = false): Promise<ResumeMeta> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('isDefault', isDefault ? 'true' : 'false');
+
+  const response = await fetch('/api/resumes', {
+    method: 'POST',
+    body: formData,
+  });
+  const data = await parseJson<ApiSuccess<{ resume: ResumeMeta }> | ApiError>(response);
+  if (!data.success) throw new Error(data.error);
+  return data.resume;
+}
+
+export async function setDefaultResume(id: string): Promise<ResumeMeta> {
+  const response = await fetch(`/api/resumes/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ isDefault: true }),
+  });
+  const data = await parseJson<ApiSuccess<{ resume: ResumeMeta }> | ApiError>(response);
+  if (!data.success) throw new Error(data.error);
+  return data.resume;
+}
+
+export async function deleteResumeFile(id: string) {
+  const response = await fetch(`/api/resumes/${id}`, { method: 'DELETE' });
+  const data = await parseJson<ApiSuccess<Record<string, never>> | ApiError>(response);
+  if (!data.success) throw new Error(data.error);
 }
 
 export async function deleteTemplate(id: string) {

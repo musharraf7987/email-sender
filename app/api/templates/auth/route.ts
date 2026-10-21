@@ -45,3 +45,9 @@ export const POST = withApiHandler(async (request) => {
   await setTemplatesAuthCookie();
   return ok({ authenticated: true });
 });
+
+export const DELETE = withApiHandler(async () => {
+  const cookieStore = await cookies();
+  cookieStore.set(TEMPLATES_AUTH_COOKIE, '', clearTemplatesAuthCookieOptions());
+  return ok({ authenticated: false });
+});

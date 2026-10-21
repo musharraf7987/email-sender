@@ -3,7 +3,10 @@ import { createHmac, timingSafeEqual } from 'crypto';
 export const TEMPLATES_AUTH_COOKIE = 'templates_auth_v2';
 export const TEMPLATES_PIN = '871887';
 export const TEMPLATES_PIN_LENGTH = TEMPLATES_PIN.length;
-export const TEMPLATES_SESSION_SECONDS = 60; // 1 minute
+/** Absolute session length after unlock */
+export const TEMPLATES_SESSION_SECONDS = 10 * 60; // 10 minutes
+/** Client locks after this much inactivity (must be ≤ session) */
+export const TEMPLATES_IDLE_SECONDS = 3 * 60; // 3 minutes
 
 export function isTemplatesProtectionEnabled(): boolean {
   return true;

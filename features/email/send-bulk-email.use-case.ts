@@ -1,27 +1,14 @@
-import path from 'path';
-import fs from 'fs';
 import { applicationRepository } from '@/features/applications/application.repository';
 import { getExpiryDate } from '@/features/applications/application.service';
 import { sendEmail } from '@/features/email/mailer';
 import { sendEmailSchema, type SendEmailInput } from '@/features/email/send-email.schema';
+import { resolveResumeForSend } from '@/features/resumes/resume.use-case';
 import { templateRepository } from '@/features/templates/template.repository';
-import { NotFoundError, ValidationError } from '@/lib/api/errors';
+import { NotFoundError } from '@/lib/api/errors';
 import { companyNameFromEmail, extractDomain } from '@/lib/company';
 import { applyTemplate, textToHtml } from '@/lib/template-utils';
 import { normalizeEmail } from '@/lib/validators/email';
 import type { SendEmailResult } from '@/types';
-
-const CV_FILENAME = process.env.CV_FILENAME ?? 'Musharraf-CV.pdf';
-
-function loadCvBuffer(): Buffer {
-  const cvPath = path.join(process.cwd(), 'public', CV_FILENAME);
-  if (!fs.existsSync(cvPath)) {
-    throw new ValidationError(
-      'CV file not found. Please ensure Musharraf-CV.pdf is in the public folder.'
-    );
-  }
-  return fs.readFileSync(cvPath);
-}
 
 export async function sendBulkEmail(input: unknown): Promise<{
   allSuccess: boolean;
@@ -38,7 +25,9 @@ export async function sendBulkEmail(input: unknown): Promise<{
   const subject = applyTemplate(template.subject, { jobTitle });
   const plainBody = applyTemplate(template.body, { jobTitle });
   const htmlBody = textToHtml(plainBody);
-  const cvBuffer = loadCvBuffer();
+  const resume = await resolveResumeForSend(template.resumeId);
+  const cvBuffer = resume.content;
+  const cvFilename = resume.filename;
 
   const appliedAt = new Date();
   const expiresAt = getExpiryDate(appliedAt);
@@ -67,7 +56,7 @@ export async function sendBulkEmail(input: unknown): Promise<{
 
     try {
       const result = await sendEmail(normalizedEmail, subject, htmlBody, [
-        { filename: CV_FILENAME, content: cvBuffer },
+        { filename: cvFilename, content: cvBuffer },
       ]);
 
       const application = await applicationRepository.create({
